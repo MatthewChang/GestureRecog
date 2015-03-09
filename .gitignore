@@ -1,0 +1,7 @@
+*.jpg
+*.bmp
+*.png
+*.dll
+*.htm
+x64/*
+Backup/*
