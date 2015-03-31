@@ -31,6 +31,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <iostream>
+#include "./Gestures.h"
 
 #include <DepthSense.hxx>
 
@@ -79,6 +80,8 @@ bool g_saveImageFlag = false, g_saveDepthFlag = false;
 const int BUFFER_SIZE = 512;
 int buffer_pos;
 Point buffer[BUFFER_SIZE];
+
+int trigger = 0;
 
 void write_buffer(Point x) {
 	buffer_pos = (buffer_pos + 1) % BUFFER_SIZE;
@@ -261,19 +264,39 @@ void onNewDepthSample(DepthNode node, DepthNode::NewSampleReceivedData data)
 	//cout << vector << endl;
 
 	float thresh = 20;
-	if (vector.x > thresh && vector.y > thresh) {
-		printf("down right\n");
-	}
-	if (vector.x < -thresh && vector.y > thresh) {
-		printf("down left\n");
+	if (vector.x > thresh && vector.y < -thresh) {
+		//printf("up right\n");
+		trigger = 1;
 	}
 	if (vector.x < -thresh && vector.y < -thresh) {
-		printf("up left\n");
-	}
-	if (vector.x > thresh && vector.y < -thresh) {
-		printf("up right\n");
-	}
+		//printf("up left\n");
+		if (trigger == 1||trigger == 2) {
+			trigger = 2;
+		}
+		else {
+			trigger = 0;
+		}
 
+	}
+	if (vector.x < -thresh && vector.y > thresh) {
+		//printf("down left\n");
+		if (trigger == 2 || trigger == 3) {
+			trigger = 3;
+		}
+		else {
+			trigger = 0;
+		}
+	}
+	if (vector.x > thresh && vector.y > thresh) {
+		//printf("down right\n");
+		if (trigger == 3 || trigger == 4) {
+			printf("Circle\n");
+			trigger = 0;
+		}
+	}
+	
+	
+	
 	
 	Mat max_connected_component = Mat::zeros(g_szDepth, CV_8UC3);
 	drawContours(max_connected_component, contours, biggest, Scalar(255), CV_FILLED, 8, hierarchy);

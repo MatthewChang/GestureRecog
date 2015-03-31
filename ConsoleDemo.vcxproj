@@ -180,6 +180,9 @@ opencv_highgui249.lib;opencv_imgproc249.lib;%(AdditionalDependencies)</Additiona
   <ItemGroup>
     <ClCompile Include="ConsoleDemo.cxx" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Gestures.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
