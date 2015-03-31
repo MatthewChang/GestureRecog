@@ -75,6 +75,30 @@ bool running = 1;
 
 bool g_saveImageFlag = false, g_saveDepthFlag = false;
 
+
+const int BUFFER_SIZE = 512;
+int buffer_pos;
+Point buffer[BUFFER_SIZE];
+
+void write_buffer(Point x) {
+	buffer_pos = (buffer_pos + 1) % BUFFER_SIZE;
+	buffer[buffer_pos] = x;
+}
+
+Point read_buffer(int delay) {
+	if (delay >= BUFFER_SIZE || delay < 0) {
+		printf("Buffer Read Out of Bounds\n");
+		return 0;
+	}
+	int pos = (buffer_pos - delay + BUFFER_SIZE) % BUFFER_SIZE;
+	return buffer[pos];
+}
+
+class Waypoint {
+	double angle;
+	double distance;
+};
+
 void yuy2rgb(unsigned char *dst, const unsigned char *src, const int width, const int height) {
 	int x, y;
 	const int width2 = width * 2;
@@ -172,15 +196,11 @@ void onNewDepthSample(DepthNode node, DepthNode::NewSampleReceivedData data)
 
 	double rate = 1.0;
 	videoImage = cvarrToMat(g_videoImage, false);
-	Mat temp;
 	depthImage = cvarrToMat(g_depthImage, false);
 	depthImage = depthImage.colRange(left_offset, depthImage.cols - right_offset);
 	depthImage = depthImage.rowRange(top_offset, depthImage.rows - bottom_offset);
 	resize(depthImage, depthImage, g_szDepth);
-	//cvarrToMat(g_depthImage, false).convertTo(temp,CV_32FC1);
-	//depthImage = depthImage*(1-rate);
-	//depthImage = depthImage + temp*(rate);
-
+	
 	Mat videoDown = Mat(g_szDepth, CV_8UC3);
 	Mat depthMask = Mat(depthImage.size(), CV_32FC1);
 	threshold(depthImage, depthMask, depth_threshold, 255, THRESH_BINARY_INV);
@@ -194,6 +214,71 @@ void onNewDepthSample(DepthNode node, DepthNode::NewSampleReceivedData data)
 	cvtColor(depthMask, rgbMask, CV_GRAY2RGB);
 	rgbMask = rgbMask *(1.0 / 255);
 	//depthImage = cvarrToMat(g_depthImage, false);
+
+	Mat channels[3];
+	split(videoDown, channels);
+	
+	Mat rmb = channels[2] - channels[0];
+	Mat rmg = channels[2] - channels[1];
+	Mat mindiff = min(rmb, rmg);
+
+	imshow("diff", mindiff);
+
+	Mat rgb_segmented;
+
+	threshold(mindiff, rgb_segmented, 7, 255, THRESH_BINARY);
+	
+	Mat temp;
+	int niters = 1;
+	dilate(rgb_segmented, temp, Mat(), Point(-1, -1), niters);
+	erode(temp, temp, Mat(), Point(-1, -1), niters);
+	//dilate(temp, temp, Mat(), Point(-1, -1), niters);
+
+	vector<vector<Point> > contours;
+	vector<Vec4i> hierarchy;
+	findContours(temp, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));
+	int biggest = 0;
+	for (int i = 1; i < contours.size(); i++) {
+		if (contourArea(contours[i]) > contourArea(contours[biggest])) {
+			biggest = i;
+		}
+	}
+	Point centroid(0, 0);
+	for (int i = 0; i < contours[biggest].size(); i++) {
+		centroid += contours[biggest][i];
+	}
+	centroid *= 1.0/contours[biggest].size();
+	
+	write_buffer(centroid);
+	Point vector = read_buffer(0) - read_buffer(10);
+	
+	/*if (vector.y > 30) {
+		printf("down\n");
+	}
+	else if (vector.y < -30) {
+		printf("up\n");
+	}*/
+	//cout << vector << endl;
+
+	float thresh = 20;
+	if (vector.x > thresh && vector.y > thresh) {
+		printf("down right\n");
+	}
+	if (vector.x < -thresh && vector.y > thresh) {
+		printf("down left\n");
+	}
+	if (vector.x < -thresh && vector.y < -thresh) {
+		printf("up left\n");
+	}
+	if (vector.x > thresh && vector.y < -thresh) {
+		printf("up right\n");
+	}
+
+	
+	Mat max_connected_component = Mat::zeros(g_szDepth, CV_8UC3);
+	drawContours(max_connected_component, contours, biggest, Scalar(255), CV_FILLED, 8, hierarchy);
+	
+	imshow("RGB Segmented", max_connected_component);
 	imshow("Video", videoDown);
 	imshow("Depth", depthImage);
 	imshow("DepthMask", depthMask);
