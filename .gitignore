@@ -3,6 +3,7 @@
 *.png
 *.dll
 *.htm
+*.sdf
 x64/*
 Backup/*
 *.opensdf
